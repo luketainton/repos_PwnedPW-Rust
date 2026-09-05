@@ -153,6 +153,16 @@ jobs:
             export PATH="${zig_dir}:${PATH}"
           fi
           zig version
+          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+            macos_sdk_version=14.5
+            macos_sdk_archive="MacOSX${macos_sdk_version}.sdk.tar.xz"
+            curl --fail --silent --show-error --location \
+              "https://github.com/joseluisq/macosx-sdks/releases/download/${macos_sdk_version}/${macos_sdk_archive}" \
+              --output "/tmp/${macos_sdk_archive}"
+            macos_sdk_dir="/opt/MacOSX${macos_sdk_version}.sdk"
+            tar -xJf "/tmp/${macos_sdk_archive}" -C /opt
+            echo "MACOS_SDK=${macos_sdk_dir}" >> "${GITHUB_ENV}"
+          fi
       - name: Configure cross-compilers
         if: matrix.target != 'x86_64-unknown-linux-gnu'
         shell: bash
@@ -170,7 +180,7 @@ jobs:
                 '  esac' \
                 '  args+=("$arg")' \
                 'done' \
-                'exec zig cc "${args[@]}"' > /tmp/zig-apple-cc
+                'exec zig cc --sysroot="${MACOS_SDK}" "${args[@]}"' > /tmp/zig-apple-cc
               chmod +x /tmp/zig-apple-cc
               echo "CC_x86_64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
@@ -182,6 +192,7 @@ jobs:
                 'for arg in "$@"; do' \
                 '  case "$arg" in' \
                 '    --target=x86_64-pc-windows-gnu) arg=--target=x86_64-windows-gnu ;;' \
+                '    -Wl,-Bdynamic) arg=-Wl,-Bstatic ;;' \
                 '  esac' \
                 '  args+=("$arg")' \
                 'done' \

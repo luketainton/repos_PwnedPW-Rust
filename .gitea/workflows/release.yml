@@ -227,7 +227,7 @@ jobs:
                 'args=(--target=aarch64-macos)' \
                 'for arg in "$@"; do' \
                 '  case "$arg" in' \
-                '    --target=aarch64-apple-macosx) arg=--target=aarch64-macos ;;' \
+                '    --target=arm64-apple-macosx|--target=aarch64-apple-macosx) arg=--target=aarch64-macos ;;' \
                 '  esac' \
                 '  args+=("$arg")' \
                 'done' \

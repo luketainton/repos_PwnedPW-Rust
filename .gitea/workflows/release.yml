@@ -150,6 +150,7 @@ jobs:
             install -d -m 0755 "${zig_dir}"
             cp -R "/tmp/zig-x86_64-linux-${zig_version}/." "${zig_dir}/"
             echo "${zig_dir}" >> "${GITHUB_PATH}"
+            export PATH="${zig_dir}:${PATH}"
           fi
           zig version
       - name: Configure cross-compilers

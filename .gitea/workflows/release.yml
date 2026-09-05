@@ -141,12 +141,12 @@ jobs:
           fi
           if ! command -v zig >/dev/null 2>&1; then
             zig_version=0.14.1
-            zig_archive="zig-linux-x86_64-${zig_version}.tar.xz"
+            zig_archive="zig-x86_64-linux-${zig_version}.tar.xz"
             curl --fail --silent --show-error --location \
               "https://ziglang.org/download/${zig_version}/${zig_archive}" \
               --output "/tmp/${zig_archive}"
             tar -xJf "/tmp/${zig_archive}" -C /tmp
-            install -m 0755 "/tmp/zig-linux-x86_64-${zig_version}/zig" /usr/local/bin/zig
+            install -m 0755 "/tmp/zig-x86_64-linux-${zig_version}/zig" /usr/local/bin/zig
           fi
           zig version
       - name: Configure cross-compilers

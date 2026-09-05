@@ -24,11 +24,41 @@ jobs:
         uses: actions/checkout@v4
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Set Cargo version from release tag
+        env:
+          PACKAGE_VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${PACKAGE_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must be a valid v-prefixed Cargo version: $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+          VERSION="$version" python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("Cargo.toml")
+          text = path.read_text()
+          version = os.environ["VERSION"]
+          updated, count = re.subn(
+              r'(?ms)(\[package\].*?^version\s*=\s*)"[^"]+"',
+              rf'\1"{version}"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("could not find [package] version in Cargo.toml")
+          path.write_text(updated)
+          PY
+          cargo check
       - name: Publish crate to Gitea Cargo registry
         env:
           CARGO_REGISTRIES_GITEA_INDEX: sparse+${{ github.server_url }}/api/packages/repos/cargo/
           CARGO_REGISTRIES_GITEA_TOKEN: Bearer ${{ secrets.ACTIONS_TOKEN }}
-        run: cargo publish --locked --registry gitea
+        run: cargo publish --locked --allow-dirty --registry gitea
       - name: Reuse or create Gitea release
         id: release
         env:

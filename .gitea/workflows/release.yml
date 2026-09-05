@@ -210,7 +210,7 @@ jobs:
                 '  esac' \
                 '  args+=("$arg")' \
                 'done' \
-                'exec zig cc -isysroot "${MACOS_SDK}" "${args[@]}"' > /tmp/zig-apple-cc
+                'exec zig cc -isysroot "${MACOS_SDK}" -L "${MACOS_SDK}/usr/lib" "${args[@]}"' > /tmp/zig-apple-cc
               chmod +x /tmp/zig-apple-cc
               echo "CC_x86_64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
@@ -223,6 +223,7 @@ jobs:
                 '  case "$arg" in' \
                 '    --target=x86_64-pc-windows-gnu) arg=--target=x86_64-windows-gnu ;;' \
                 '    -Wl,-Bdynamic) arg=-Wl,-Bstatic ;;' \
+                '    -l:libpthread.a) arg=-lpthread ;;' \
                 '  esac' \
                 '  args+=("$arg")' \
                 'done' \

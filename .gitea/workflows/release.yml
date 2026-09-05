@@ -113,6 +113,10 @@ jobs:
             target: x86_64-apple-darwin
             binary: pwnedpw
             asset: pwnedpw-${{ github.ref_name }}-macos-x86_64
+          - name: macOS arm64
+            target: aarch64-apple-darwin
+            binary: pwnedpw
+            asset: pwnedpw-${{ github.ref_name }}-macos-arm64
           - name: Windows x86_64
             target: x86_64-pc-windows-gnu
             binary: pwnedpw.exe
@@ -183,7 +187,8 @@ jobs:
             export PATH="${zig_dir}:${PATH}"
           fi
           zig version
-          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+          case "${{ matrix.target }}" in
+          *-apple-darwin)
             macos_sdk_version=14.5
             macos_sdk_archive="MacOSX${macos_sdk_version}.sdk.tar.xz"
             curl --fail --silent --show-error --location \
@@ -192,7 +197,8 @@ jobs:
             macos_sdk_dir="/opt/MacOSX${macos_sdk_version}.sdk"
             tar -xJf "/tmp/${macos_sdk_archive}" -C /opt
             echo "MACOS_SDK=${macos_sdk_dir}" >> "${GITHUB_ENV}"
-          fi
+            ;;
+          esac
       - name: Configure cross-compilers
         if: matrix.target != 'x86_64-unknown-linux-gnu'
         shell: bash
@@ -214,6 +220,21 @@ jobs:
               chmod +x /tmp/zig-apple-cc
               echo "CC_x86_64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
+              ;;
+            aarch64-apple-darwin)
+              printf '%s\n' \
+                '#!/usr/bin/env bash' \
+                'args=(--target=aarch64-macos)' \
+                'for arg in "$@"; do' \
+                '  case "$arg" in' \
+                '    --target=aarch64-apple-macosx) arg=--target=aarch64-macos ;;' \
+                '  esac' \
+                '  args+=("$arg")' \
+                'done' \
+                'exec zig cc -isysroot "${MACOS_SDK}" -L "${MACOS_SDK}/usr/lib" "${args[@]}"' > /tmp/zig-apple-cc
+              chmod +x /tmp/zig-apple-cc
+              echo "CC_aarch64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               ;;
             x86_64-pc-windows-gnu)
               printf '%s\n' \

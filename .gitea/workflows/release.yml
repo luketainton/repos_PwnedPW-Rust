@@ -27,7 +27,7 @@ jobs:
       - name: Publish crate to Gitea Cargo registry
         env:
           CARGO_REGISTRIES_GITEA_INDEX: sparse+${{ github.server_url }}/api/packages/repos/cargo/
-          CARGO_REGISTRIES_GITEA_TOKEN: Bearer ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRIES_GITEA_TOKEN: Bearer ${{ secrets.ACTIONS_TOKEN }}
         run: cargo publish --locked --registry gitea
       - name: Reuse or create Gitea release
         id: release

@@ -158,15 +158,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2016
           case "${{ matrix.target }}" in
             x86_64-apple-darwin)
-              printf '#!/bin/sh\nexec zig cc -target x86_64-macos "$@"\n' > /tmp/zig-apple-cc
+              printf '%s\n' \
+                '#!/usr/bin/env bash' \
+                'args=()' \
+                'for arg in "$@"; do' \
+                '  case "$arg" in' \
+                '    --target=x86_64-apple-macosx) arg=--target=x86_64-macos ;;' \
+                '  esac' \
+                '  args+=("$arg")' \
+                'done' \
+                'exec zig cc "${args[@]}"' > /tmp/zig-apple-cc
               chmod +x /tmp/zig-apple-cc
               echo "CC_x86_64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
               ;;
             x86_64-pc-windows-gnu)
-              printf '#!/bin/sh\nexec zig cc -target x86_64-windows-gnu "$@"\n' > /tmp/zig-windows-cc
+              printf '%s\n' \
+                '#!/usr/bin/env bash' \
+                'args=()' \
+                'for arg in "$@"; do' \
+                '  case "$arg" in' \
+                '    --target=x86_64-pc-windows-gnu) arg=--target=x86_64-windows-gnu ;;' \
+                '  esac' \
+                '  args+=("$arg")' \
+                'done' \
+                'exec zig cc "${args[@]}"' > /tmp/zig-windows-cc
               chmod +x /tmp/zig-windows-cc
               echo "CC_x86_64_pc_windows_gnu=/tmp/zig-windows-cc" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=/tmp/zig-windows-cc" >> "$GITHUB_ENV"

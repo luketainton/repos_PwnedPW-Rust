@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-latest
+            archive: pwnedpw-${{ github.ref_name }}-linux-x86_64.tar.gz
+            binary: pwnedpw
+          - name: macOS x86_64
+            os: macos-latest
+            archive: pwnedpw-${{ github.ref_name }}-macos-x86_64.tar.gz
+            binary: pwnedpw
+          - name: Windows x86_64
+            os: windows-latest
+            archive: pwnedpw-${{ github.ref_name }}-windows-x86_64.zip
+            binary: pwnedpw.exe
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release --locked
+      - name: Package Unix binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: tar -czf "${{ matrix.archive }}" -C target/release "${{ matrix.binary }}"
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "target/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
+      - name: Upload packaged binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish Gitea release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download packaged binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Reuse or create release and upload binaries
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_API: ${{ github.server_url }}/api/v1
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_url="$GITEA_API/repos/$REPOSITORY/releases/tags/$RELEASE_TAG"
+          release_status=$(curl --silent --show-error \
+            --header "Authorization: token $GITEA_TOKEN" \
+            --output /tmp/pwnedpw-release.json \
+            --write-out '%{http_code}' \
+            "$release_url")
+
+          if [ "$release_status" = "200" ]; then
+            echo "Using existing Gitea release for $RELEASE_TAG"
+            release_json=$(< /tmp/pwnedpw-release.json)
+          elif [ "$release_status" = "404" ]; then
+            echo "Creating Gitea release for $RELEASE_TAG"
+            release_json=$(curl --silent --show-error --fail-with-body \
+              --request POST \
+              --header "Authorization: token $GITEA_TOKEN" \
+              --header 'Content-Type: application/json' \
+              --data "{\"tag_name\":\"$RELEASE_TAG\",\"name\":\"$RELEASE_TAG\",\"body\":\"Automated release $RELEASE_TAG\"}" \
+              "$GITEA_API/repos/$REPOSITORY/releases")
+          else
+            cat /tmp/pwnedpw-release.json
+            echo "Release lookup failed with HTTP $release_status" >&2
+            exit 1
+          fi
+
+          upload_url=$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["upload_url"])')
+          find release-assets -type f -print0 | while IFS= read -r -d '' asset; do
+            filename=$(basename "$asset")
+            existing_id=$(RELEASE_JSON="$release_json" FILENAME="$filename" python3 -c \
+              'import json,os; data=json.loads(os.environ["RELEASE_JSON"]); print(next((str(a["id"]) for a in data.get("assets", []) if a.get("name") == os.environ["FILENAME"]), ""))')
+            if [ -n "$existing_id" ]; then
+              echo "Replacing existing asset $filename"
+              curl --silent --show-error --fail-with-body \
+                --request DELETE \
+                --header "Authorization: token $GITEA_TOKEN" \
+                "$GITEA_API/repos/$REPOSITORY/releases/$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')/assets/$existing_id"
+            fi
+            curl --silent --show-error --fail-with-body \
+              --request POST \
+              --header "Authorization: token $GITEA_TOKEN" \
+              --form "attachment=@$asset" \
+              "$upload_url?name=$filename"
+          done

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.gitea/workflows/.*\\.yml$"],
+      "matchStrings": ["zig_version=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "ziglang/zig",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "loose"
+    }
+  ]
+}

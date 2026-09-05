@@ -124,6 +124,28 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install Linux cross-compilation tools
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        run: apk add --no-cache zig mingw-w64-binutils
+      - name: Configure cross-compilers
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.target }}" in
+            x86_64-apple-darwin)
+              printf '#!/bin/sh\nexec zig cc -target x86_64-macos "$@"\n' > /tmp/zig-apple-cc
+              chmod +x /tmp/zig-apple-cc
+              echo "CC_x86_64_apple_darwin=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=/tmp/zig-apple-cc" >> "$GITHUB_ENV"
+              ;;
+            x86_64-pc-windows-gnu)
+              printf '#!/bin/sh\nexec zig cc -target x86_64-windows-gnu "$@"\n' > /tmp/zig-windows-cc
+              chmod +x /tmp/zig-windows-cc
+              echo "CC_x86_64_pc_windows_gnu=/tmp/zig-windows-cc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=/tmp/zig-windows-cc" >> "$GITHUB_ENV"
+              ;;
+          esac
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Upload binary directly to Gitea release

@@ -163,7 +163,7 @@ jobs:
             x86_64-apple-darwin)
               printf '%s\n' \
                 '#!/usr/bin/env bash' \
-                'args=()' \
+                'args=(--target=x86_64-macos)' \
                 'for arg in "$@"; do' \
                 '  case "$arg" in' \
                 '    --target=x86_64-apple-macosx) arg=--target=x86_64-macos ;;' \
@@ -178,7 +178,7 @@ jobs:
             x86_64-pc-windows-gnu)
               printf '%s\n' \
                 '#!/usr/bin/env bash' \
-                'args=()' \
+                'args=(--target=x86_64-windows-gnu)' \
                 'for arg in "$@"; do' \
                 '  case "$arg" in' \
                 '    --target=x86_64-pc-windows-gnu) arg=--target=x86_64-windows-gnu ;;' \

@@ -7,64 +7,20 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   RELEASE_TAG: ${{ github.ref_name }}
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux x86_64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive: pwnedpw-${{ github.ref_name }}-linux-x86_64.tar.gz
-            binary: pwnedpw
-          - name: macOS x86_64
-            os: ubuntu-latest
-            target: x86_64-apple-darwin
-            archive: pwnedpw-${{ github.ref_name }}-macos-x86_64.tar.gz
-            binary: pwnedpw
-          - name: Windows x86_64
-            os: ubuntu-latest
-            target: x86_64-pc-windows-gnu
-            archive: pwnedpw-${{ github.ref_name }}-windows-x86_64.zip
-            binary: pwnedpw.exe
-
+  prepare:
+    name: Prepare release and publish crate
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }}
-      - name: Package Unix binary
-        if: matrix.target != 'x86_64-pc-windows-gnu'
-        shell: bash
-        run: tar -czf "${{ matrix.archive }}" -C "target/${{ matrix.target }}/release" "${{ matrix.binary }}"
-      - name: Package Windows binary
-        if: matrix.target == 'x86_64-pc-windows-gnu'
-        shell: bash
-        run: zip "${{ matrix.archive }}" "target/${{ matrix.target }}/release/${{ matrix.binary }}"
-      - name: Upload packaged binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.archive }}
-          path: ${{ matrix.archive }}
-          if-no-files-found: error
-
-  publish:
-    name: Publish Gitea release
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Check out source for Cargo publishing
         uses: actions/checkout@v4
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -73,13 +29,10 @@ jobs:
           CARGO_REGISTRIES_GITEA_INDEX: sparse+${{ github.server_url }}/api/packages/repos/cargo/
           CARGO_REGISTRIES_GITEA_TOKEN: Bearer ${{ secrets.GITEA_TOKEN }}
         run: cargo publish --locked --registry gitea
-      - name: Download packaged binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-      - name: Reuse or create release and upload binaries
+      - name: Reuse or create Gitea release
+        id: release
         env:
-          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
           GITEA_API: ${{ github.server_url }}/api/v1
           REPOSITORY: ${{ github.repository }}
         shell: bash
@@ -109,21 +62,66 @@ jobs:
             exit 1
           fi
 
+          release_id=$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
           upload_url=$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["upload_url"])')
-          find release-assets -type f -print0 | while IFS= read -r -d '' asset; do
-            filename=$(basename "$asset")
-            existing_id=$(RELEASE_JSON="$release_json" FILENAME="$filename" python3 -c \
-              'import json,os; data=json.loads(os.environ["RELEASE_JSON"]); print(next((str(a["id"]) for a in data.get("assets", []) if a.get("name") == os.environ["FILENAME"]), ""))')
-            if [ -n "$existing_id" ]; then
-              echo "Replacing existing asset $filename"
-              curl --silent --show-error --fail-with-body \
-                --request DELETE \
-                --header "Authorization: token $GITEA_TOKEN" \
-                "$GITEA_API/repos/$REPOSITORY/releases/$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')/assets/$existing_id"
-            fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and upload ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            target: x86_64-unknown-linux-gnu
+            binary: pwnedpw
+            asset: pwnedpw-${{ github.ref_name }}-linux-x86_64
+          - name: macOS x86_64
+            target: x86_64-apple-darwin
+            binary: pwnedpw
+            asset: pwnedpw-${{ github.ref_name }}-macos-x86_64
+          - name: Windows x86_64
+            target: x86_64-pc-windows-gnu
+            binary: pwnedpw.exe
+            asset: pwnedpw-${{ github.ref_name }}-windows-x86_64.exe
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Upload binary directly to Gitea release
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_API: ${{ github.server_url }}/api/v1
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          UPLOAD_URL: ${{ needs.prepare.outputs.upload_url }}
+          ASSET_NAME: ${{ matrix.asset }}
+          ASSET_PATH: target/${{ matrix.target }}/release/${{ matrix.binary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets_json=$(curl --silent --show-error --fail-with-body \
+            --header "Authorization: token $GITEA_TOKEN" \
+            "$GITEA_API/repos/$REPOSITORY/releases/$RELEASE_ID/assets")
+          existing_id=$(ASSETS_JSON="$assets_json" ASSET_NAME="$ASSET_NAME" python3 -c \
+            'import json,os; data=json.loads(os.environ["ASSETS_JSON"]); print(next((str(a["id"]) for a in data if a.get("name") == os.environ["ASSET_NAME"]), ""))')
+          if [ -n "$existing_id" ]; then
+            echo "Replacing existing asset $ASSET_NAME"
             curl --silent --show-error --fail-with-body \
-              --request POST \
+              --request DELETE \
               --header "Authorization: token $GITEA_TOKEN" \
-              --form "attachment=@$asset" \
-              "$upload_url?name=$filename"
-          done
+              "$GITEA_API/repos/$REPOSITORY/releases/$RELEASE_ID/assets/$existing_id"
+          fi
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --header "Authorization: token $GITEA_TOKEN" \
+            --form "attachment=@$ASSET_PATH" \
+            "$UPLOAD_URL?name=$ASSET_NAME"

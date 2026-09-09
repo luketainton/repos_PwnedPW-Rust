@@ -6,7 +6,7 @@ description = "Checks if your password has been leaked."
 license = "MIT"
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 sha1 = "0.10"
 rpassword = "7"
 atty = "0.2"

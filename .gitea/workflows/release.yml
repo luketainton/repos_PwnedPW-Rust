@@ -174,7 +174,7 @@ jobs:
             exit 1
           fi
           if ! command -v zig >/dev/null 2>&1; then
-            zig_version=0.14.1
+            zig_version=0.15.1
             zig_archive="zig-x86_64-linux-${zig_version}.tar.xz"
             curl --fail --silent --show-error --location \
               "https://ziglang.org/download/${zig_version}/${zig_archive}" \

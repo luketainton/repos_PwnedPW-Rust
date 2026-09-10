@@ -21,7 +21,7 @@ jobs:
       upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Set Cargo version from release tag
@@ -123,7 +123,7 @@ jobs:
             asset: pwnedpw-${{ github.ref_name }}-windows-x86_64.exe
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:

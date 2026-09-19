@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
-sha1 = "0.10"
+sha1 = "0.11"
 rpassword = "7"
 atty = "0.2"
 

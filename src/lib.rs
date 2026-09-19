@@ -8,7 +8,7 @@ pub const HIBP_RANGE_URL: &str = "https://api.pwnedpasswords.com/range";
 
 pub fn hash_password(password: &str) -> (String, String) {
     let digest = Sha1::digest(password.as_bytes());
-    let hex = format!("{digest:X}");
+    let hex: String = digest.iter().map(|byte| format!("{byte:02X}")).collect();
     (hex[..5].to_owned(), hex[5..].to_owned())
 }
 
